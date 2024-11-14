@@ -1,0 +1,21 @@
+<html>
+<head>
+	<title>Client</title>
+	<meta charset="utf-8"/>
+
+</head>
+<body>
+	<div id="network-test" style="margin-top: 20px; padding: 10px; border: 1px solid #ccc;">
+		<h3>Network Test Utility</h3>
+        <label for="useSsl">Use SSL</label>
+		<input type="checkbox" id="useSsl" />
+        <label for="hostAddress">Host Address:</label>
+		<input type="text" id="hostAddress" name="hostAddress" value="localhost:8000">
+		<button id="startNetworkTest">Test Connection</button>
+	</div>
+	<script src="static/js/network/MetricsManager.js"></script>
+	<script src="static/js/network/NetworkTester.js"></script>
+	<script src="static/js/network/ConnectionManager.js"></script>
+	<script src="static/js/network/config.js"></script>
+</body>
+</html>
