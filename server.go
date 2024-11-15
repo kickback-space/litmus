@@ -20,9 +20,6 @@ func NewServer(port uint) *Server {
 	}
 }
 
-// Listen begins accepting incoming network test connections.
-// The handler returns an error when the websocket connection should be terminated.
-// Returns on http server error.
 func (s *Server) Listen(port uint, pathBase string) error {
 	addr := ":" + strconv.FormatUint(uint64(port), 10)
 

@@ -46,12 +46,10 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
             size := profile.PacketSize
             packetsPerSecond := profile.PacketsPerSecond
 
-            // Adjust ticker interval if needed
             if packetsPerSecond > 0 {
                 ticker.Reset(time.Second / time.Duration(packetsPerSecond))
             }
 
-            // Prepare the packet
             packet := make([]byte, size)
             binary.BigEndian.PutUint32(packet[0:headerSize-8], sequence)
             binary.BigEndian.PutUint64(packet[headerSize-8:headerSize], uint64(time.Now().UnixNano()))

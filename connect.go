@@ -1,4 +1,3 @@
-// deals with connection stuff
 package litmus
 
 import (
@@ -30,7 +29,6 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
     }
     defer ws.Close()
 
-    // Add mutex for websocket writes
     var wsWriteMutex sync.Mutex
     writeJSON := func(v interface{}) error {
         wsWriteMutex.Lock()
@@ -77,7 +75,7 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
                     // Channel might be full or closed
                 }
             }
-            cancel() // Cancel the context to ensure stream exits
+            cancel()
         }
     })
 
@@ -100,11 +98,10 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
         go stream(ctx, dc, connID, testDone, testError, SessionTuner, peerConnection)
     
         dc.OnClose(func() {
-            cancel() // Ensure that the context is canceled if the data channel closes
+            cancel()
         })
     })
 
-    // Message handling loop
     for {
         select {
         case err := <-testError:
@@ -122,7 +119,7 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
                         Entry{"connID", connID})
                     return err
                 }
-                return nil // Normal close
+                return nil
             }
 
             msgType, ok := msg["type"].(string)

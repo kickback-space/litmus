@@ -102,7 +102,6 @@ class MetricsManager {
   }
 
   async detectNetworkCapabilities() {
-    // Simplified to just check if API is available
     if (!("connection" in navigator)) {
       console.warn("Network Information API not supported in this browser.");
     }

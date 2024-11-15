@@ -1,4 +1,3 @@
-// profiles.go
 package litmus
 
 type VideoProfile struct {

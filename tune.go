@@ -1,4 +1,3 @@
-// adaptive_session.go
 package litmus
 
 import (
@@ -111,4 +110,3 @@ func (as *SessionTuner) adjustProfile(currentLoss, currentJitter float64) {
         }
     }
 }
-

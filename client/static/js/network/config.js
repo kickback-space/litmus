@@ -1,6 +1,5 @@
 // NetworkConfig.js
 const NetworkConfig = {
-  // WebRTC configuration
   rtcConfig: {
     iceServers: [
       {
@@ -9,11 +8,10 @@ const NetworkConfig = {
     ],
   },
   
-  // Data channel configuration
   dataChannelConfig: {
     ordered: false,
     maxRetransmits: 0,
   }
 };
-// Prevent modifications to the configuration
+
 Object.freeze(NetworkConfig);
