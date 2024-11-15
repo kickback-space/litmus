@@ -1,6 +1,6 @@
 module github.com/kickback-space/litmus
 
-go 1.22.6
+go 1.22.0
 
 require (
 	github.com/blitz-frost/log v0.0.2
