@@ -48,7 +48,7 @@ func NewSessionTuner(profiles []VideoProfile) *SessionTuner {
 
 func (as *SessionTuner) getCurrentProfile() (VideoProfile, error) {
     if as.currentProfile >= len(as.profiles) {
-        Log(Warning, "getCurrentProfile called with out-of-bounds index",
+        Log(Info, "getCurrentProfile called with out-of-bounds index",
             Entry{"currentProfile", as.currentProfile},
             Entry{"profilesLength", len(as.profiles)})
         return VideoProfile{}, errors.New("no suitable profiles")

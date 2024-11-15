@@ -26,16 +26,11 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
         dc.Close()
         close(testDone)
         peerConnection.Close()
-
-        Log(Info, "Network test complete",
-            Entry{"packets_sent", sequence},
-            Entry{"connID", connID})
     }()
 
     for {
         select {
         case <-ctx.Done():
-            Log(Info, "Stream context canceled", Entry{"connID", connID})
             return
         case <-ticker.C:
             if SessionTuner.testComplete {

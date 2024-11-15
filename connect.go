@@ -66,10 +66,6 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
     defer cancel()
 
     peerConnection.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-        Log(Info, "network litmus connection state changed", 
-            Entry{"state", state.String()},
-            Entry{"connID", connID})
-        
         if state == webrtc.PeerConnectionStateClosed ||
            state == webrtc.PeerConnectionStateFailed ||
            state == webrtc.PeerConnectionStateDisconnected {
@@ -101,15 +97,9 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
     })
     
     peerConnection.OnDataChannel(func(dc *webrtc.DataChannel) {
-        Log(Info, "network litmus data channel opened", 
-            Entry{"label", dc.Label()},
-            Entry{"connID", connID})
-    
         go stream(ctx, dc, connID, testDone, testError, SessionTuner, peerConnection)
     
         dc.OnClose(func() {
-            Log(Info, "network litmus data channel closed",
-                Entry{"connID", connID})
             cancel() // Ensure that the context is canceled if the data channel closes
         })
     })
@@ -151,10 +141,6 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
                 if err != nil { 
                     return err
                 }
-                Log(Info, "Received metrics report",
-                    Entry{"loss_rate", lossRate},
-                    Entry{"jitter", jitter},
-                    Entry{"current_profile", profile.Name})
 
                 SessionTuner.adjustProfile(lossRate, jitter)
 
