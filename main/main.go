@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/kickback-space/litmus/litmus"
+	"github.com/kickback-space/litmus"
 	. "github.com/blitz-frost/log"
 	"os"
 	"os/signal"
