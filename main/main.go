@@ -16,7 +16,9 @@ func main() {
 	path := ""
 	go func() {
 		Log(Info, "Litmus server online.")
-		err := litmus.Listen(8000, path)
+		server := litmus.NewServer(8000)
+
+		err := server.ListenStandalone(path)
 		if err != nil {
 			Err(Critical, "network litmus server listen", err)
 		}
