@@ -16,7 +16,7 @@ Litmus is a Go package that provides adaptive network quality testing for WebRTC
 go get github.com/kickback-space/litmus
 ```
 
-## Quick Start
+## Quick Start StandAlone
 
 ```go
 package main
@@ -27,9 +27,9 @@ import (
 
 func main() {
     // Start the Litmus server on port 8080
-    if err := litmus.Listen(8080, ""); err != nil {
-        panic(err)
-    }
+    server := litmus.NewServer(8000)
+
+    err := server.ListenStandalone(path)
 }
 ```
 

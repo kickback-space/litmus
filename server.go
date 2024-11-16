@@ -9,8 +9,8 @@ import (
 )
 
 type Server struct {
-	port     uint
-	pathBase string
+	port        uint
+	pathBase    string
 	connections sync.Map
 }
 
@@ -20,9 +20,8 @@ func NewServer(port uint) *Server {
 	}
 }
 
-func (s *Server) Listen(port uint, pathBase string) error {
-	addr := ":" + strconv.FormatUint(uint64(port), 10)
-
+// RegisterHandlers registers litmus-specific HTTP handlers to the provided ServeMux.
+func (s *Server) RegisterHandlers(mux *http.ServeMux, pathBase string) {
 	path := "/litmus"
 	if pathBase != "" {
 		path = "/" + pathBase + path
@@ -45,14 +44,15 @@ func (s *Server) Listen(port uint, pathBase string) error {
 		w.Write([]byte("Litmus OK"))
 	}
 
-	mux := http.NewServeMux()
 	mux.HandleFunc(path, handle)
 	mux.HandleFunc(healthPath, healthHandle)
-
-	return http.ListenAndServe(addr, mux)
 }
 
-func Listen(port uint, pathBase string) error {
-	server := NewServer(port)
-	return server.Listen(port, pathBase)
+
+// Optionally, retain the Listen function for standalone usage
+func (s *Server) ListenStandalone(pathBase string) error {
+	addr := ":" + strconv.FormatUint(uint64(s.port), 10)
+	mux := http.NewServeMux()
+	s.RegisterHandlers(mux, pathBase)
+	return http.ListenAndServe(addr, mux)
 }
