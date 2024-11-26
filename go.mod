@@ -30,7 +30,7 @@ require (
 	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/wlynxg/anet v0.0.3 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
-	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
