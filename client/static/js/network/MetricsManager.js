@@ -5,12 +5,12 @@ class MetricsManager {
       packetLoss: { current: 0 }
     };
 
-    this.sendRate = 300;
     this.receivedPacketsWindow = [];
     this.lastPacketTimestamp = null;
     this.lastInterarrival = 0;
     this.totalPackets = 0;
     this.lastReport = null;
+    this.bytesSinceLastReport = 0;
     this.onMetricsUpdateCallback = null;
     this.onMetricsReportCallback = null;
   }
@@ -18,6 +18,9 @@ class MetricsManager {
   processPacketData(metricsData) {
     const { data, timestamp } = metricsData;
     const sequence = new DataView(data.buffer).getUint32(0);
+    const updateInterval = 200; // ms
+
+    this.bytesSinceLastReport += data.byteLength;
 
     this.updatePacketLoss(sequence, timestamp);
     this.updateJitter(timestamp);
@@ -26,16 +29,24 @@ class MetricsManager {
       this.onMetricsUpdateCallback(this.metrics);
     }
 
-    if (!this.lastReport || timestamp - this.lastReport >= 100) {
+    if (!this.lastReport || timestamp - this.lastReport >= updateInterval) {
+      const elapsedMs = this.lastReport ? (timestamp - this.lastReport) : updateInterval;
+      const bitsReceived = this.bytesSinceLastReport * 8;
+      const actualThroughput = (bitsReceived * 1000) / elapsedMs; // bits/second
+
+      console.log("actual throughput")
+      console.log(actualThroughput)
       if (this.onMetricsReportCallback) {
         this.onMetricsReportCallback({
           type: "metrics_report",
           loss_rate: this.metrics.packetLoss.current,
           jitter: this.metrics.jitter.current,
           sequence,
+          actual_throughput: actualThroughput
         });
       }
       this.lastReport = timestamp;
+      this.bytesSinceLastReport = 0;
     }
   }
 
@@ -51,12 +62,6 @@ class MetricsManager {
 
     this.lastInterarrival = currentTimestamp - (this.lastPacketTimestamp || currentTimestamp);
     this.lastPacketTimestamp = currentTimestamp;
-  }
-
-  updateSendRate(rate) {
-    if (rate !== this.sendRate) {
-      this.sendRate = rate;
-    }
   }
 
   updatePacketLoss(sequence, timestamp) {
@@ -91,6 +96,7 @@ class MetricsManager {
     this.lastInterarrival = 0;
     this.totalPackets = 0;
     this.lastReport = null;
+    this.bytesSinceLastReport = 0;
   }
 
   onMetricsUpdate(callback) {

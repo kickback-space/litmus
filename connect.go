@@ -1,3 +1,4 @@
+// litmus/connect.go
 package litmus
 
 import (
@@ -61,7 +62,7 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
     // Initialize NetworkTuner with default settings
     networkTuner := NewNetworkTuner(
         1000,    // Start at 1 Mbps
-        20000,   // Max 20 Mbps
+        200000,   // Max 20 Mbps
         1000,    // 1 Mbps steps
     )
 
@@ -138,9 +139,17 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
             case "metrics_report":
                 lossRate, _ := msg["loss_rate"].(float64)
                 jitter, _ := msg["jitter"].(float64)
+                actualThroughput, _ := msg["actual_throughput"].(float64)
 
-                shouldContinue := networkTuner.adjustBitrate(lossRate, jitter)
+                Log(Info, "received throughput", Entry{"client throughput", actualThroughput})
 
+                serverEffectiveRate := networkTuner.GetServerEffectiveRate()
+                shouldContinue := networkTuner.adjustBitrate(lossRate, jitter, actualThroughput, serverEffectiveRate)
+                
+                b := strconv.Itoa(networkTuner.getCurrentBitrate())
+
+                Log(Info, "Current bitrate", Entry{"bitrate", b})
+                
                 // Send current state back to client
                 if err := writeJSON(map[string]interface{}{
                     "type":    "bitrate_update",
@@ -158,9 +167,7 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
                     capability := networkTuner.GetCapability()
                     if err := writeJSON(map[string]interface{}{
                         "type":              "test_complete",
-                        "max_bitrate":       capability.MaxStableBitrate,
-                        "final_loss_rate":   capability.PacketLossRate,
-                        "final_jitter":      capability.Jitter,
+                        "bitrate":       capability.MaxStableBitrate,
                     }); err != nil {
                         Log(Error, "Failed to send test complete message",
                             Entry{"error", err},

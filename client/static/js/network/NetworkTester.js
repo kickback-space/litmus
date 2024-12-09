@@ -5,7 +5,7 @@ class NetworkTester {
 		this.metricsManager = new MetricsManager();
 		this.testStartTime = null;
 		this.isRunning = false;
-		this.lastProfile = null;
+		this.lastBirate = null;
 		
 		this.connectionManager.onStateChange((state) => {
 			this.handleConnectionStateChange(state);
@@ -27,8 +27,8 @@ class NetworkTester {
 			this.handleTestComplete(result);
 		});
 
-		this.connectionManager.onProfileUpdate((data) => {
-			this.onProfileUpdate(data);
+		this.connectionManager.onBirateUpdate((data) => {
+			this.onBirateUpdate(data);
 		})
 	}
 
@@ -58,21 +58,20 @@ class NetworkTester {
 
 	handleTestComplete(result) {
 
-		const finalProfile = result || this.lastProfile?.profile || 'No profile available';
-		console.log('Test Complete! Final Profile:', result);
+		const finalProfile = result || this.lastBirate || 'No birate available';
+		console.log('Test Complete! Final Bitrate:', result);
 		
 		const testCompleteElement = document.getElementById('testComplete');
 		if (testCompleteElement) {
-			testCompleteElement.textContent = `Test Complete! Final Profile: ${result}`;
+			testCompleteElement.textContent = `Test Complete! Final bitrate: ${result}`;
 			testCompleteElement.style.display = 'block';
 		}
 
 		this.stopTest();
 	}
 
-	onProfileUpdate(data) {
-		this.lastProfile = data; 
-		this.metricsManager.updateSendRate(data.send_rate)
+	onBirateUpdate(data) {
+		this.lastBirate = data; 
 	}
 
 	stopTest() {

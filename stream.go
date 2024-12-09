@@ -1,3 +1,4 @@
+// litmus/stream.go
 package litmus
 
 import (
@@ -12,7 +13,7 @@ import (
 
 const (
     headerSize      = 12
-    maxTestDuration = 15 * time.Second
+    maxTestDuration = 200 * time.Second
 )
 
 func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone chan struct{}, testError chan error, networkTuner *NetworkTuner, peerConnection *webrtc.PeerConnection) {
@@ -35,6 +36,10 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
         return
     }
 
+   var lastBufferedAmount uint64
+   var totalBytesSent uint64
+   lastCheckTime := time.Now()
+
     for {
         select {
         case <-ctx.Done():
@@ -48,7 +53,7 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
             currentBitrate := networkTuner.getCurrentBitrate()
             packetSize, packetsPerSecond := calculatePacketRate(currentBitrate)
 
-            // Adjust send rate
+            // Adjust send rate interval
             if packetsPerSecond > 0 {
                 newInterval := time.Second / time.Duration(packetsPerSecond)
                 ticker.Reset(newInterval)
@@ -74,8 +79,27 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
                 testError <- err
                 return
             }
+            totalBytesSent += uint64(packetSize)
 
             sequence++
+
+            // Check buffered amount to see if data is actually going out or backing up
+            currentBuffered := dc.BufferedAmount()
+
+            elapsed := time.Since(lastCheckTime).Milliseconds()
+            if elapsed >= 1000 {
+                diff := int64(currentBuffered) - int64(lastBufferedAmount)
+                // effectiveSentBitsPerSec = (total bytes sent - buffer growth) * 8 bits/byte / elapsed seconds
+                effectiveSentBitsPerSec := (float64(int64(totalBytesSent)-diff) * 8.0) / (float64(elapsed)/1000.0)
+
+                networkTuner.SetServerEffectiveRate(effectiveSentBitsPerSec)
+
+                // Reset counters for next interval
+                lastBufferedAmount = currentBuffered
+                totalBytesSent = 0
+                lastCheckTime = time.Now()
+            }
+
 
             if time.Since(startTime) >= maxTestDuration {
                 Log(Info, "Max test duration reached", Entry{"connID", connID})

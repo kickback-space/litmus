@@ -85,7 +85,7 @@ func ParseMimeType(mimeType string) VideoCodec {
     case "video/H264":
         return CodecH264
 	case "video/h265":
-		reutnr CodecH265
+		return CodecH265
     case "video/VP8":
         return CodecVP8
     case "video/VP9":
@@ -93,7 +93,7 @@ func ParseMimeType(mimeType string) VideoCodec {
     case "video/AV1":
         return CodecAV1
     default:
-        return nil
+        return ""
     }
 }
 

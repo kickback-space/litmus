@@ -1,12 +1,19 @@
+// litmus/network.go
 package litmus
 
 import (
     "sync"
     "time"
+    "fmt"
+    . "github.com/blitz-frost/log"
+
 )
 
 const (
     defaultPacketSize = 1200  // bytes, typical MTU size
+    adaptInterval              = 200 * time.Millisecond
+    requiredStableIntervals    = 8
+    requiredFailureIntervals   = 4
 )
 
 // NetworkCapability represents the measured network performance characteristics
@@ -27,6 +34,7 @@ type NetworkTuner struct {
     testComplete      bool
     bestStable        NetworkCapability
     mu                sync.Mutex
+    serverEffectiveRate float64
 }
 
 func NewNetworkTuner(initialBitrate, maxBitrate, stepSize int) *NetworkTuner {
@@ -36,6 +44,18 @@ func NewNetworkTuner(initialBitrate, maxBitrate, stepSize int) *NetworkTuner {
         stepSize:      stepSize,
         lastAdjustment: time.Now(),
     }
+}
+
+func (nt *NetworkTuner) SetServerEffectiveRate(rate float64) {
+    nt.mu.Lock()
+    defer nt.mu.Unlock()
+    nt.serverEffectiveRate = rate
+}
+
+func (nt *NetworkTuner) GetServerEffectiveRate() float64 {
+    nt.mu.Lock()
+    defer nt.mu.Unlock()
+    return nt.serverEffectiveRate
 }
 
 func (nt *NetworkTuner) getCurrentBitrate() int {
@@ -56,7 +76,7 @@ func (nt *NetworkTuner) GetCapability() NetworkCapability {
     return nt.bestStable
 }
 
-func (nt *NetworkTuner) adjustBitrate(lossRate, jitter float64) bool {
+func (nt *NetworkTuner) adjustBitrate(lossRate, jitter, actualThroughput, serverEffectiveRate float64) bool {
     nt.mu.Lock()
     defer nt.mu.Unlock()
 
@@ -65,6 +85,38 @@ func (nt *NetworkTuner) adjustBitrate(lossRate, jitter float64) bool {
         return !nt.testComplete
     }
     nt.lastAdjustment = now
+
+ //   expectedBitsPerSec := nt.currentBitrate * 1000
+  //  serverRatio := (serverEffectiveRate / float64(expectedBitsPerSec)) * 100
+
+
+    //percentageThroughput := (actualThroughput / float64(expectedBitsPerSec)) * 100
+
+    clientToServerEffectiveRatio := (actualThroughput / serverEffectiveRate) * 100
+
+    // Log(Info, "loss rate", Entry{"loss rate", lossRate})
+    // Log(Info, "jitter", Entry{"jitter", jitter})
+    // Log(Info, "expected_bits_per_sec", Entry{"value", expectedBitsPerSec})
+    // Log(Info, "server effective rate", Entry{"value", serverEffectiveRate})
+
+    // Log(Info, "server ratio", Entry{"value", fmt.Sprintf("%.2f%%", serverRatio)})
+    // Log(Info, "actual_throughput", Entry{"value", actualThroughput})
+    // Log(Info, "percentage_throughput", Entry{"value", fmt.Sprintf("%.2f%%", percentageThroughput)})
+    Log(Info, "diff from through throughput", Entry{"diff", fmt.Sprintf("%.2f%%", clientToServerEffectiveRatio)})
+    
+
+    // if actualThroughput < float64(expectedBitsPerSec)*0.8 {
+    //     nt.failureCount++
+    //     nt.stableCount = 0
+    //     if nt.failureCount >= requiredFailureIntervals {
+    //         nt.currentBitrate -= nt.stepSize
+    //         if nt.currentBitrate < 1000 {
+    //             // nt.test_complete = true
+    //             // return false
+    //             return true
+    //         }
+    //     }
+    // }
 
     // Check if current bitrate is stable
     if lossRate <= 0.01 && jitter <= 20.0 {
@@ -84,8 +136,9 @@ func (nt *NetworkTuner) adjustBitrate(lossRate, jitter float64) bool {
                 nt.currentBitrate += nt.stepSize
                 nt.stableCount = 0
             } else {
-                nt.testComplete = true
-                return false
+                // TODO uncomment
+                // nt.testComplete = true
+                return true
             }
         }
     } else {
