@@ -84,7 +84,8 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
             currentBuffered := dc.BufferedAmount()
 
             elapsed := time.Since(lastCheckTime).Milliseconds()
-            if elapsed >= 100 {
+            // 200 matches the adaptInterval in network.go and metrics manager
+            if elapsed >= 200 {
                 // Calculate actual bytes transmitted (accounting for buffer changes)
                 bufferChange := int64(currentBuffered) - int64(lastBufferedAmount)
                 actualBytesSent := int64(totalBytesSent)
