@@ -1,3 +1,4 @@
+// litmus/connect.go
 package litmus
 
 import (
@@ -57,8 +58,13 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
 
     testDone := make(chan struct{})
     testError := make(chan error, 1)
-    initProfiles()
-    SessionTuner := NewSessionTuner(VideoProfiles)
+    
+    // Initialize NetworkTuner with default settings
+    networkTuner := NewNetworkTuner(
+        2000,    // Start at 1 Mbps
+        20000,   // Max 20 Mbps
+        1000,    // 1 Mbps steps
+    )
 
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
@@ -95,7 +101,7 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
     })
     
     peerConnection.OnDataChannel(func(dc *webrtc.DataChannel) {
-        go stream(ctx, dc, connID, testDone, testError, SessionTuner, peerConnection)
+        go stream(ctx, dc, connID, testDone, testError, networkTuner, peerConnection)
     
         dc.OnClose(func() {
             cancel()
@@ -133,37 +139,37 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
             case "metrics_report":
                 lossRate, _ := msg["loss_rate"].(float64)
                 jitter, _ := msg["jitter"].(float64)
+                actualThroughput, _ := msg["actual_throughput"].(float64)
 
-                profile, err := SessionTuner.getCurrentProfile()
-                if err != nil { 
+
+                serverEffectiveRate := networkTuner.GetServerEffectiveRate()
+                shouldContinue := networkTuner.adjustBitrate(lossRate, jitter, actualThroughput, serverEffectiveRate)
+                
+                // Send current state back to client
+                if err := writeJSON(map[string]interface{}{
+                    "type":    "bitrate_update",
+                    "bitrate": networkTuner.getCurrentBitrate(),
+                    "final":   !shouldContinue,
+                }); err != nil {
+                    Log(Error, "Failed to send bitrate update",
+                        Entry{"error", err},
+                        Entry{"connID", connID})
                     return err
                 }
 
-                SessionTuner.adjustProfile(lossRate, jitter)
-
-                if SessionTuner.testComplete {
-                    finalProfile, err := SessionTuner.getCurrentProfile()
-                    if err != nil { 
-                        return err
-                    }
+                // If test is complete, send final results
+                if !shouldContinue {
+                    capability := networkTuner.GetCapability()
                     if err := writeJSON(map[string]interface{}{
-                        "type":   "test_complete",
-                        "result": finalProfile.Name,
+                        "type":    "test_complete",
+                        "bitrate": capability.MaxStableBitrate,
+                        "final":   true,
                     }); err != nil {
                         Log(Error, "Failed to send test complete message",
                             Entry{"error", err},
                             Entry{"connID", connID})
                         return err
                     }
-                }
-
-                if err := writeJSON(map[string]interface{}{
-                    "type":      "profile_update",
-                    "profile":   profile.Name,
-                    "send_rate": profile.PacketsPerSecond,
-                    "final":     SessionTuner.testComplete,
-                }); err != nil {
-                    return err
                 }
 
             case "offer":
