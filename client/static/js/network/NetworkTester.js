@@ -54,6 +54,7 @@ class NetworkTester {
 			this.stopTest();
 			throw error;
 		}
+		console.log("Started...")
 	}
 
 	handleTestComplete(result) {

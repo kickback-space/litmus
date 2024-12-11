@@ -141,14 +141,9 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
                 jitter, _ := msg["jitter"].(float64)
                 actualThroughput, _ := msg["actual_throughput"].(float64)
 
-                Log(Info, "received throughput", Entry{"client throughput", actualThroughput})
 
                 serverEffectiveRate := networkTuner.GetServerEffectiveRate()
                 shouldContinue := networkTuner.adjustBitrate(lossRate, jitter, actualThroughput, serverEffectiveRate)
-                
-                b := strconv.Itoa(networkTuner.getCurrentBitrate())
-
-                Log(Info, "Current bitrate", Entry{"bitrate", b})
                 
                 // Send current state back to client
                 if err := writeJSON(map[string]interface{}{
@@ -166,8 +161,9 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
                 if !shouldContinue {
                     capability := networkTuner.GetCapability()
                     if err := writeJSON(map[string]interface{}{
-                        "type":              "test_complete",
-                        "bitrate":       capability.MaxStableBitrate,
+                        "type":    "test_complete",
+                        "bitrate": capability.MaxStableBitrate,
+                        "final":   true,
                     }); err != nil {
                         Log(Error, "Failed to send test complete message",
                             Entry{"error", err},

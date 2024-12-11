@@ -53,13 +53,11 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
             currentBitrate := networkTuner.getCurrentBitrate()
             packetSize, packetsPerSecond := calculatePacketRate(currentBitrate)
 
-            // Adjust send rate interval
             if packetsPerSecond > 0 {
                 newInterval := time.Second / time.Duration(packetsPerSecond)
                 ticker.Reset(newInterval)
             }
 
-            // Create and send test packet
             packet := make([]byte, packetSize)
             binary.BigEndian.PutUint32(packet[0:headerSize-8], sequence)
             binary.BigEndian.PutUint64(packet[headerSize-8:headerSize], uint64(time.Now().UnixNano()))
@@ -83,7 +81,6 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
 
             sequence++
 
-            // Check buffered amount to see if data is actually going out or backing up
             currentBuffered := dc.BufferedAmount()
 
             elapsed := time.Since(lastCheckTime).Milliseconds()
@@ -97,19 +94,9 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
                     actualBytesSent += -bufferChange
                 }
                 
-                // Calculate effective rate in bits per second
                 effectiveSentBitsPerSec := float64(actualBytesSent) * 8.0 / (float64(elapsed)/1000.0)
-                
-                Log(Info, "Throughput calculation", Entries{
-                    {"totalBytesSent", totalBytesSent},
-                    {"bufferChange", bufferChange},
-                    {"actualBytesSent", actualBytesSent},
-                    {"effectiveRate", effectiveSentBitsPerSec},
-                })
-
                 networkTuner.SetServerEffectiveRate(effectiveSentBitsPerSec)
 
-                // Reset counters for next interval
                 lastBufferedAmount = currentBuffered
                 totalBytesSent = 0
                 lastCheckTime = time.Now()

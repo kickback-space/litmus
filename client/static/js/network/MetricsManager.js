@@ -34,8 +34,6 @@ class MetricsManager {
       const bitsReceived = this.bytesSinceLastReport * 8;
       const actualThroughput = (bitsReceived * 1000) / elapsedMs; // bits/second
 
-      console.log("actual throughput")
-      console.log(actualThroughput)
       if (this.onMetricsReportCallback) {
         this.onMetricsReportCallback({
           type: "metrics_report",
