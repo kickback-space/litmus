@@ -5,15 +5,20 @@ import (
     "sync"
     "time"
     "fmt"
+    "math"
     . "github.com/blitz-frost/log"
-
 )
 
 const (
-    defaultPacketSize = 1200  // bytes, typical MTU size
-    adaptInterval              = 200 * time.Millisecond
-    requiredStableIntervals    = 8
-    requiredFailureIntervals   = 4
+    defaultPacketSize          = 1200  // bytes, typical MTU size
+    adaptInterval             = 200 * time.Millisecond
+    requiredStableIntervals   = 8
+    requiredFailureIntervals  = 4
+    requiredDeviationIntervals = 4
+    MaxStablePacketLossRate   = 0.01   // 1% packet loss threshold
+    MaxStableJitter          = 20.0   // milliseconds
+    MaxEffectiveRateDeviation = 30.0   // percent
+    StepUpEffectiveDeviation = 20.0   // percent threshold for stepping up
 )
 
 // NetworkCapability represents the measured network performance characteristics
@@ -25,15 +30,16 @@ type NetworkCapability struct {
 
 // NetworkTuner manages the network capability discovery process
 type NetworkTuner struct {
-    currentBitrate    int
-    maxBitrate        int
-    stepSize          int
-    lastAdjustment    time.Time
-    stableCount       int
-    failureCount      int
-    testComplete      bool
-    bestStable        NetworkCapability
-    mu                sync.Mutex
+    currentBitrate      int
+    maxBitrate         int
+    stepSize           int
+    lastAdjustment     time.Time
+    stableCount        int
+    failureCount       int
+    deviationCount     int
+    testComplete       bool
+    bestStable         NetworkCapability
+    mu                 sync.Mutex
     serverEffectiveRate float64
 }
 
@@ -86,59 +92,103 @@ func (nt *NetworkTuner) adjustBitrate(lossRate, jitter, actualThroughput, server
     }
     nt.lastAdjustment = now
 
- //   expectedBitsPerSec := nt.currentBitrate * 1000
-  //  serverRatio := (serverEffectiveRate / float64(expectedBitsPerSec)) * 100
+    clientToServerEffectiveRatio := 0.0
+    if serverEffectiveRate > 0 {
+        clientToServerEffectiveRatio = (actualThroughput / serverEffectiveRate) * 100
+    }
 
+    targetBitrateInBps := float64(nt.currentBitrate) * 1000
 
-    //percentageThroughput := (actualThroughput / float64(expectedBitsPerSec)) * 100
+    // Calculate deviation of server effective rate from target bitrate
+    effectiveRateDeviation := 0.0
+    if serverEffectiveRate > 0 {
+        effectiveRateDeviation = math.Abs((targetBitrateInBps - serverEffectiveRate) / targetBitrateInBps * 100)
+    }
 
-    clientToServerEffectiveRatio := (actualThroughput / serverEffectiveRate) * 100
+    Log(Info, "network metrics", Entry{
+        "throughput_diff", fmt.Sprintf("%.2f%%", clientToServerEffectiveRatio),
+    })
+    Log(Info, "effective to target diff", Entry{ 
+        "effective_rate_deviation", fmt.Sprintf("%.2f%%", effectiveRateDeviation),
+    })
 
-    // Log(Info, "loss rate", Entry{"loss rate", lossRate})
-    // Log(Info, "jitter", Entry{"jitter", jitter})
-    // Log(Info, "expected_bits_per_sec", Entry{"value", expectedBitsPerSec})
-    // Log(Info, "server effective rate", Entry{"value", serverEffectiveRate})
+    // Track consecutive high deviations
+    if effectiveRateDeviation > MaxEffectiveRateDeviation {
+        nt.deviationCount++
+        Log(Info, "High rate deviation detected", Entry{
+            "count", nt.deviationCount,
+        })
 
-    // Log(Info, "server ratio", Entry{"value", fmt.Sprintf("%.2f%%", serverRatio)})
-    // Log(Info, "actual_throughput", Entry{"value", actualThroughput})
-    // Log(Info, "percentage_throughput", Entry{"value", fmt.Sprintf("%.2f%%", percentageThroughput)})
-    Log(Info, "diff from through throughput", Entry{"diff", fmt.Sprintf("%.2f%%", clientToServerEffectiveRatio)})
-    
-
-    // if actualThroughput < float64(expectedBitsPerSec)*0.8 {
-    //     nt.failureCount++
-    //     nt.stableCount = 0
-    //     if nt.failureCount >= requiredFailureIntervals {
-    //         nt.currentBitrate -= nt.stepSize
-    //         if nt.currentBitrate < 1000 {
-    //             // nt.test_complete = true
-    //             // return false
-    //             return true
-    //         }
-    //     }
-    // }
+        // If we see consistent high deviation, step down regardless of other metrics
+        if nt.deviationCount >= requiredDeviationIntervals {
+            // Step down bitrate
+            newBitrate := int(serverEffectiveRate / 1000) // Convert to kbps
+            
+            // Ensure we don't drop too aggressively
+            if newBitrate < nt.currentBitrate-nt.stepSize {
+                newBitrate = nt.currentBitrate - nt.stepSize
+            }
+            
+            nt.currentBitrate = newBitrate
+            nt.deviationCount = 0
+            nt.stableCount = 0
+            
+            if nt.currentBitrate < 1000 { // Minimum 1 Mbps
+                nt.testComplete = true
+                return false
+            }
+            
+            // Update best stable to current measured throughput
+            nt.bestStable = NetworkCapability{
+                MaxStableBitrate: newBitrate,
+                PacketLossRate:   lossRate,
+                Jitter:           jitter,
+            }
+            
+            return true
+        }
+    } else {
+        nt.deviationCount = 0
+    }
 
     // Check if current bitrate is stable
-    if lossRate <= 0.01 && jitter <= 20.0 {
+    if lossRate <= MaxStablePacketLossRate && jitter <= MaxStableJitter && effectiveRateDeviation <= MaxEffectiveRateDeviation {
         nt.stableCount++
         nt.failureCount = 0
 
-        // Update best stable configuration
+        Log(Info, "stable ", Entry{})
         if nt.stableCount >= requiredStableIntervals {
-            nt.bestStable = NetworkCapability{
+            // We've confirmed stability at this bitrate
+            currentCapability := NetworkCapability{
                 MaxStableBitrate: nt.currentBitrate,
                 PacketLossRate:   lossRate,
-                Jitter:          jitter,
+                Jitter:           jitter,
             }
 
-            // Try higher bitrate if not at max
-            if nt.currentBitrate < nt.maxBitrate {
+            // Check if this stable throughput is significantly better than the last stable throughput
+            if nt.bestStable.MaxStableBitrate > 0 {
+                lastThroughput := float64(nt.bestStable.MaxStableBitrate)
+                currentThroughput := float64(currentCapability.MaxStableBitrate)
+
+                // If improvement is not significant, conclude saturation
+                if currentThroughput < lastThroughput*1.01 {
+                    Log(Info, "No significant improvement observed, concluding saturation.")
+                    nt.testComplete = true
+                    return false
+                }
+            }
+
+            // Update best stable configuration to the new one
+            nt.bestStable = currentCapability
+
+            // Try higher bitrate if not at max and deviation is low
+            if nt.currentBitrate < nt.maxBitrate && effectiveRateDeviation < StepUpEffectiveDeviation {
                 nt.currentBitrate += nt.stepSize
                 nt.stableCount = 0
             } else {
-                // TODO uncomment
-                // nt.testComplete = true
-                return true
+                // We reached maxBitrate or high deviation
+                nt.testComplete = true
+                return false
             }
         }
     } else {

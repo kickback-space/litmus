@@ -87,10 +87,25 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
             currentBuffered := dc.BufferedAmount()
 
             elapsed := time.Since(lastCheckTime).Milliseconds()
-            if elapsed >= 1000 {
-                diff := int64(currentBuffered) - int64(lastBufferedAmount)
-                // effectiveSentBitsPerSec = (total bytes sent - buffer growth) * 8 bits/byte / elapsed seconds
-                effectiveSentBitsPerSec := (float64(int64(totalBytesSent)-diff) * 8.0) / (float64(elapsed)/1000.0)
+            if elapsed >= 100 {
+                // Calculate actual bytes transmitted (accounting for buffer changes)
+                bufferChange := int64(currentBuffered) - int64(lastBufferedAmount)
+                actualBytesSent := int64(totalBytesSent)
+                
+                // If buffer decreased, those bytes were sent too
+                if bufferChange < 0 {
+                    actualBytesSent += -bufferChange
+                }
+                
+                // Calculate effective rate in bits per second
+                effectiveSentBitsPerSec := float64(actualBytesSent) * 8.0 / (float64(elapsed)/1000.0)
+                
+                Log(Info, "Throughput calculation", Entries{
+                    {"totalBytesSent", totalBytesSent},
+                    {"bufferChange", bufferChange},
+                    {"actualBytesSent", actualBytesSent},
+                    {"effectiveRate", effectiveSentBitsPerSec},
+                })
 
                 networkTuner.SetServerEffectiveRate(effectiveSentBitsPerSec)
 

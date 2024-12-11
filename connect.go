@@ -61,8 +61,8 @@ func (s *Server) handleConnection(w http.ResponseWriter, r *http.Request) error 
     
     // Initialize NetworkTuner with default settings
     networkTuner := NewNetworkTuner(
-        1000,    // Start at 1 Mbps
-        200000,   // Max 20 Mbps
+        2000,    // Start at 1 Mbps
+        20000,   // Max 20 Mbps
         1000,    // 1 Mbps steps
     )
 
