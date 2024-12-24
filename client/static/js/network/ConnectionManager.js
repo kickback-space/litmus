@@ -8,7 +8,7 @@ class ConnectionManager {
     this.onMetricsCallback = null;
     this.onStateChangeCallback = null;
     this.onTestCompleteCallback = null;
-    this.onProfileUpdateCallback = null;
+    this.onBitrateUpdateCallback = null;
     this.connectionState = 'disconnected';
   }
 
@@ -90,15 +90,15 @@ class ConnectionManager {
           );
           break;
 
-        case 'profile_update':
-          if (this.onProfileUpdateCallback) {
-            this.onProfileUpdateCallback(response);
+        case 'bitrate_update':
+          if (this.onBitrateUpdateCallback) {
+            this.onBitrateUpdateCallback(response.bitrate);
           }
           break;
 
         case 'test_complete':
           if (this.onTestCompleteCallback) {
-            this.onTestCompleteCallback(response.result);
+            this.onTestCompleteCallback(response.bitrate);
           }
           break;
 
@@ -218,8 +218,8 @@ class ConnectionManager {
     this.onTestCompleteCallback = callback;
   }
 
-  onProfileUpdate(callback) { 
-    this.onProfileUpdateCallback = callback;
+  onBirateUpdate(callback) { 
+    this.onBitrateUpdateCallback = callback;
   }
 
   onStateChange(callback) {

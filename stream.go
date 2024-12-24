@@ -1,3 +1,4 @@
+// litmus/stream.go
 package litmus
 
 import (
@@ -12,14 +13,14 @@ import (
 
 const (
     headerSize      = 12
-    maxTestDuration = 15 * time.Second
+    maxTestDuration = 200 * time.Second
 )
 
-func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone chan struct{}, testError chan error, SessionTuner *SessionTuner, peerConnection *webrtc.PeerConnection) {
+func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone chan struct{}, testError chan error, networkTuner *NetworkTuner, peerConnection *webrtc.PeerConnection) {
     startTime := time.Now()
     sequence := uint32(0)
 
-    ticker := time.NewTicker(time.Second)
+    ticker := time.NewTicker(time.Millisecond * 100)
     defer ticker.Stop()
 
     defer func() {
@@ -28,34 +29,40 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
         peerConnection.Close()
     }()
 
+    calculatePacketRate := func(bitrate int) (packetSize int, packetsPerSecond int) {
+        packetSize = defaultPacketSize
+        bitsPerPacket := packetSize * 8
+        packetsPerSecond = (bitrate * 1000) / bitsPerPacket
+        return
+    }
+
+   var lastBufferedAmount uint64
+   var totalBytesSent uint64
+   lastCheckTime := time.Now()
+
     for {
         select {
         case <-ctx.Done():
             return
         case <-ticker.C:
-            if SessionTuner.testComplete {
-                Log(Info, "Test completed successfully", Entry{"connID", connID})
+            if networkTuner.IsTestComplete() {
+                Log(Info, "Network testing complete", Entry{"connID", connID})
                 return
             }
 
-            profile, err := SessionTuner.getCurrentProfile()
-            if err != nil {
-                continue
-            }
-
-            size := profile.PacketSize
-            packetsPerSecond := profile.PacketsPerSecond
+            currentBitrate := networkTuner.getCurrentBitrate()
+            packetSize, packetsPerSecond := calculatePacketRate(currentBitrate)
 
             if packetsPerSecond > 0 {
-                ticker.Reset(time.Second / time.Duration(packetsPerSecond))
+                newInterval := time.Second / time.Duration(packetsPerSecond)
+                ticker.Reset(newInterval)
             }
 
-            packet := make([]byte, size)
+            packet := make([]byte, packetSize)
             binary.BigEndian.PutUint32(packet[0:headerSize-8], sequence)
             binary.BigEndian.PutUint64(packet[headerSize-8:headerSize], uint64(time.Now().UnixNano()))
 
-            _, err = rand.Read(packet[headerSize:])
-            if err != nil {
+            if _, err := rand.Read(packet[headerSize:]); err != nil {
                 Log(Error, "Failed to generate random data",
                     Entry{"error", err},
                     Entry{"connID", connID})
@@ -66,15 +73,37 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
             if err := dc.Send(packet); err != nil {
                 Log(Error, "Failed to send test packet",
                     Entry{"error", err},
-                    Entry{"sequence", sequence},
                     Entry{"connID", connID})
-
                 testError <- err
                 return
             }
+            totalBytesSent += uint64(packetSize)
+
             sequence++
 
-            // Check if maxTestDuration is reached
+            currentBuffered := dc.BufferedAmount()
+
+            elapsed := time.Since(lastCheckTime).Milliseconds()
+            // 200 matches the adaptInterval in network.go and metrics manager
+            if elapsed >= 200 {
+                // Calculate actual bytes transmitted (accounting for buffer changes)
+                bufferChange := int64(currentBuffered) - int64(lastBufferedAmount)
+                actualBytesSent := int64(totalBytesSent)
+                
+                // If buffer decreased, those bytes were sent too
+                if bufferChange < 0 {
+                    actualBytesSent += -bufferChange
+                }
+                
+                effectiveSentBitsPerSec := float64(actualBytesSent) * 8.0 / (float64(elapsed)/1000.0)
+                networkTuner.SetServerEffectiveRate(effectiveSentBitsPerSec)
+
+                lastBufferedAmount = currentBuffered
+                totalBytesSent = 0
+                lastCheckTime = time.Now()
+            }
+
+
             if time.Since(startTime) >= maxTestDuration {
                 Log(Info, "Max test duration reached", Entry{"connID", connID})
                 return
