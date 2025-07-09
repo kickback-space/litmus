@@ -7,8 +7,8 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/pion/webrtc/v3"
 	. "github.com/blitz-frost/log"
+	"github.com/pion/webrtc/v4"
 )
 
 const (
@@ -36,9 +36,9 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
 		return
 	}
 
-   var lastBufferedAmount uint64
-   var totalBytesSent uint64
-   lastCheckTime := time.Now()
+	var lastBufferedAmount uint64
+	var totalBytesSent uint64
+	lastCheckTime := time.Now()
 
 	for {
 		select {
@@ -89,20 +89,19 @@ func stream(ctx context.Context, dc *webrtc.DataChannel, connID string, testDone
 				// Calculate actual bytes transmitted (accounting for buffer changes)
 				bufferChange := int64(currentBuffered) - int64(lastBufferedAmount)
 				actualBytesSent := int64(totalBytesSent)
-				
+
 				// If buffer decreased, those bytes were sent too
 				if bufferChange < 0 {
 					actualBytesSent += -bufferChange
 				}
-				
-				effectiveSentBitsPerSec := float64(actualBytesSent) * 8.0 / (float64(elapsed)/1000.0)
+
+				effectiveSentBitsPerSec := float64(actualBytesSent) * 8.0 / (float64(elapsed) / 1000.0)
 				networkTuner.SetServerEffectiveRate(effectiveSentBitsPerSec)
 
 				lastBufferedAmount = currentBuffered
 				totalBytesSent = 0
 				lastCheckTime = time.Now()
 			}
-
 
 			if time.Since(startTime) >= maxTestDuration {
 				Log(Info, "Max test duration reached", Entry{"connID", connID})
